@@ -10,21 +10,40 @@ resources:
 
 variables:
   tag: '$(Build.BuildId)'
+  javaVersion: '11'
+  mavenVersion: '3.8.6'  # Specify the Maven version
 
 stages:
 - stage: Build
-  displayName: Build image
+  displayName: Build image and Maven project
   jobs:
   - job: Build
     displayName: Build
     pool:
-      vmImage: ubuntu-latest
+      vmImage: 'ubuntu-latest'
       demands: docker
+
     steps:
+    - script: |
+        sudo apt-get update
+        sudo apt-get install -y openjdk-$(javaVersion)-jdk
+      displayName: 'Set up Java'
+
+    - task: Maven@3
+      inputs:
+        mavenPomFile: 'pom.xml'
+        mavenOptions: '-Xmx1024m'
+        mavenVersionOption: 'Default'
+        javaHomeOption: 'Path'
+        mavenSetM2Home: true
+        jdkDirectory: '/usr/lib/jvm/java-$(javaVersion)-openjdk-amd64'  # Path where Java is installed
+        goals: 'clean install'
+      displayName: 'Build with Maven'
+
     - task: Docker@2
       displayName: Build an image
       inputs:
         command: build
         dockerfile: '**/Dockerfile'
-        tags: |
-          $(tag)
+       
+
