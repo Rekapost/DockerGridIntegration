@@ -3,47 +3,38 @@
 # https://docs.microsoft.com/azure/devops/pipelines/languages/docker
 
 trigger:
-- master
+  branches:
+    include:
+      - main  # or your default branch
 
-resources:
-- repo: self
+pool:
+  vmImage: 'ubuntu-latest'  # Specify the virtual machine image
 
-variables:
-  tag: '$(Build.BuildId)'
-  javaVersion: '11'
-  mavenVersion: '3.8.6'  # Specify the Maven version
+steps:
+- task: Maven@3
+  inputs:
+    mavenPomFile: 'pom.xml'  # Path to your pom.xml file
+    goals: 'clean install'   # Maven goals to run
+    options: '-DskipTests=false'  # Option to run tests
+    publishJUnitResults: true  # Publish test results
+    testResultsFiles: '**/surefire-reports/TEST-*.xml'  # Test results file pattern
 
-stages:
-- stage: Build
-  displayName: Build image and Maven project
-  jobs:
-  - job: Build
-    displayName: Build
-    pool:
-      vmImage: 'ubuntu-latest'
-      demands: docker
+- task: PublishTestResults@2
+  inputs:
+    testResultsFiles: '**/target/surefire-reports/TEST-*.xml'  # Ensure this path matches your project structure
+    testResultsFormat: 'JUnit'
+    failTaskOnFailedTests: true
 
-    steps:
-    - script: |
-        sudo apt-get update
-        sudo apt-get install -y openjdk-$(javaVersion)-jdk
-      displayName: 'Set up Java'
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: '$(System.DefaultWorkingDirectory)/target'  # Archive target directory
+    includeRootFolder: false
+    archiveType: 'zip'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+    replaceExistingArchive: true
 
-    - task: Maven@3
-      inputs:
-        mavenPomFile: 'pom.xml'
-        mavenOptions: '-Xmx1024m'
-        mavenVersionOption: 'Default'
-        javaHomeOption: 'Path'
-        mavenSetM2Home: true
-        jdkDirectory: '/usr/lib/jvm/java-$(javaVersion)-openjdk-amd64'  # Path where Java is installed
-        goals: 'clean install'
-      displayName: 'Build with Maven'
-
-    - task: Docker@2
-      displayName: Build an image
-      inputs:
-        command: build
-        dockerfile: '**/Dockerfile'
-       
-
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+    ArtifactName: 'maven-artifact'
+    publishLocation: 'Container'
